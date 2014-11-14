@@ -81,4 +81,4 @@ for filename in args:
     if options.dry_run:
         print("Dry run; not copying '%s' to '%s'" % (filename, newfilename))
     else:
-        os.system(cp_cmd + " " + cp_args + " -- " + filename + " " + newfilename)
+        os.system(cp_cmd + " " + cp_args + " -- '" + filename + "' '" + newfilename + "'")
