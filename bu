@@ -1,0 +1,84 @@
+#!/usr/bin/env python
+"""Backup a file/directory by time stamp."""
+VERSION = "2.1.0"
+AUTHOR = "tyler@tolaris.com"
+
+# This is free software: you can redistribute it and/or modify it under the 
+# terms of the GNU General Public License as published by the Free Software 
+# Foundation, version 2.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+import os
+import signal
+import sys
+
+# catch Ctrl-C
+def exit_silently(signal, frame):
+    print("")
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, exit_silently)
+
+# defaults
+cp_cmd="/bin/cp"
+cp_args="-a -T"
+date_format="%Y-%m-%d_%H.%M.%S"
+
+# optparse
+from optparse import OptionParser
+usage = "%prog [options] FILE [FILE] ..."
+version = "%prog " + VERSION + ", by " + AUTHOR
+parser = OptionParser(usage=usage, version=version, description=__doc__)
+parser.add_option("-c", "--current", action="store_const", help="name files by current system time (default for directories)", const="current", dest="date_mode")
+parser.add_option("-d", "--date", action="store_const", help="same as --current", const="current", dest="date_mode")
+parser.add_option("-m", "--mtime", action="store_const", help="name files by inode modification time (default for files)", const="mtime", dest="date_mode")
+parser.add_option("-n", "--dry-run", action="store_true", help="show only what actions would be taken")
+parser.add_option("-u", "--utc", action="store_true", help="use UTC instead of local time")
+parser.add_option("-v", "--verbose", action="store_true", help="verbose, explain what is being done")
+(options, args) = parser.parse_args()
+
+if len(args) < 1:
+    parser.print_help()
+
+if options.verbose:
+    cp_args = cp_args + " -v"
+
+import time
+for filename in args:
+    # collapse separators, remove final slashes
+    filename = os.path.normpath(filename)
+
+    # if explicit date mode, or if no explicit mode and filename is a directory, get current time
+    if options.date_mode == "current" or (not options.date_mode and os.path.isdir(filename)):
+        seconds = time.time()
+    # else (explicit mtime mode or filename is not a directory), get modification time
+    else:
+        # os.path.getmtime follows symlinks, so use os.lstat
+        seconds = os.lstat(filename).st_mtime
+
+    # Convert seconds since epoch to local time or UTC
+    if options.utc:
+        date = time.gmtime(seconds)
+    else:
+        date = time.localtime(seconds)
+
+    # Generate new filename
+    newfilename = str("%s_%0.4d-%0.2d-%0.2d_%0.2d.%0.2d.%0.2d" % (filename, date.tm_year, date.tm_mon, date.tm_mday, date.tm_hour, date.tm_min, date.tm_sec))
+    if options.utc:
+        newfilename += "_UTC"
+
+    if os.path.exists(newfilename):
+        print("Destination exists; not copying '%s' to '%s'" % (filename, newfilename))
+
+    if options.dry_run:
+        print("Dry run; not copying '%s' to '%s'" % (filename, newfilename))
+    else:
+        os.system(cp_cmd + " " + cp_args + " -- " + filename + " " + newfilename)
